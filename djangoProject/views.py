@@ -6,14 +6,13 @@ from rest_framework.response import Response
 from django.contrib.auth import authenticate
 import jwt
 
-
 from .models import Note
 
 from .serializers import NoteSerializer, UserSerializer
 
 
-def jwt_cookie(user_id):
-    # returns cookie
+def jwt_cookie(user_id, response):
+    # adds cookie to the response
     payload = {
         'id': user_id,
         'exp': datetime.utcnow() + timedelta(minutes=60),
@@ -21,12 +20,8 @@ def jwt_cookie(user_id):
     }
 
     token = jwt.encode(payload, 'secret', algorithm='HS256')
+    response.set_cookie(key='jwt', value=token, httponly=True, samesite='None')
 
-    response = Response()
-    response.set_cookie(key='jwt', value=token, httponly=True)
-    response.data = {
-        'jwt': token
-    }
     return response
 
 
@@ -36,10 +31,23 @@ class RegisterView(views.APIView):
         serializer = UserSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return jwt_cookie(serializer.data['id'])
+        response = Response()
+        response.data = {
+            'message': 'SUCCESS'
+        }
+        return response
 
 
 class LoginView(views.APIView):
+
+    def get(self, request):
+        response = Response()
+        token = request.COOKIES.get('jwt')
+        if not token:
+            response.data = {"UNAUTHORISED"}
+        else:
+            response.data = {"AUTHORISED"}
+        return response
 
     def post(self, request):
         username = request.data['username']
@@ -47,12 +55,12 @@ class LoginView(views.APIView):
         user = authenticate(request, username=username, password=password)
         if user is None:
             raise exceptions.AuthenticationFailed('Authentication failed')
-
-        return jwt_cookie(user.id)
+        serializer = UserSerializer(user)
+        response = Response(data=serializer.data)
+        return jwt_cookie(user_id=serializer.data['id'], response=response)
 
 
 class LogoutView(views.APIView):
-
 
     def get(self, request):
         response = Response()
@@ -61,6 +69,7 @@ class LogoutView(views.APIView):
             'message': 'SUCCESS'
         }
         return response
+
 
 class NotesView(views.APIView):
     # get notes for logged in user
@@ -110,7 +119,8 @@ class NoteView(views.APIView):
         notes = Note.objects.filter(user_id=self.get_id(request)).get(id=pk)
         notes.completed = not notes.completed
         notes.save()
-        return Response({'MESSAGE': 'SUCCESS'})
+        serializer = NoteSerializer(notes)
+        return Response(serializer.data)
 
     # edit note
     def post(self, request, pk, format=None):

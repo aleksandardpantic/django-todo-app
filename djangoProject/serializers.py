@@ -3,7 +3,6 @@ from .models import Note
 from django.contrib.auth.models import User
 
 
-
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
@@ -14,7 +13,6 @@ class UserSerializer(serializers.ModelSerializer):
         password = validated_data.pop('password', None)
         instance = self.Meta.model(**validated_data)
         if password is not None:
-
             instance.set_password(password)
         instance.save()
 
@@ -22,7 +20,6 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class NoteSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = Note
         fields = '__all__'
